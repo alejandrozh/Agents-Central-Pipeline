@@ -23,6 +23,13 @@ const AgentNode = ({ data }) => {
       <Handle
         type="target"
         position={Position.Top}
+        id="top"
+        style={{ background: '#6366f1', width: '8px', height: '8px' }}
+      />
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="left"
         style={{ background: '#6366f1', width: '8px', height: '8px' }}
       />
       
@@ -60,6 +67,13 @@ const AgentNode = ({ data }) => {
       <Handle
         type="source"
         position={Position.Bottom}
+        id="bottom"
+        style={{ background: '#8b5cf6', width: '8px', height: '8px' }}
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="right"
         style={{ background: '#8b5cf6', width: '8px', height: '8px' }}
       />
     </div>

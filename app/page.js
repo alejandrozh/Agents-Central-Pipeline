@@ -56,6 +56,10 @@ export default function Home() {
   const [isChatConsoleOpen, setIsChatConsoleOpen] = useState(false);
   const [isChatExecuting, setIsChatExecuting] = useState(false);
 
+  // Concept Modal & Loop Mode States
+  const [isConceptModalOpen, setIsConceptModalOpen] = useState(false);
+  const [isLoopMode, setIsLoopMode] = useState(false);
+
   // Fetch agents data
   const fetchData = async () => {
     try {
@@ -400,64 +404,77 @@ export default function Home() {
       return;
     }
 
+    const cycles = isLoopMode ? 2 : 1;
     setChatMessages(prev => [
       ...prev,
-      { sender: 'agent', agentName: 'Sistema', text: `⚙️ Iniciando secuencia. Se ejecutarán ${executionPath.length} agentes en orden según sus conexiones.` }
+      { sender: 'agent', agentName: 'Sistema', text: `⚙️ Iniciando secuencia. Se ejecutarán ${executionPath.length} agentes en orden. ${isLoopMode ? '🔄 [Modo Bucle ACTIVO: Se ejecutarán 2 ciclos completos de revisión y optimización]' : ''}` }
     ]);
 
     let currentContext = "";
 
-    // Sequential Asynchronous execution chain
-    for (const nodeId of executionPath) {
-      const agent = agents.find(a => a.id === nodeId);
-      if (!agent) continue;
-
-      setRunningNodeId(nodeId);
-      
-      setChatMessages(prev => [
-        ...prev,
-        { sender: 'agent', agentName: 'Sistema', text: `⚡ Agente "${agent.name}" procesando...` }
-      ]);
-
-      try {
-        const response = await fetch('/api/execute', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            prompt: userPrompt,
-            systemInstruction: agent.agentContent,
-            memory: agent.memoryContent,
-            context: currentContext,
-            agentName: agent.name
-          })
-        });
-
-        const result = await response.json();
-
-        if (result.error) {
-          throw new Error(result.error);
-        }
-
-        currentContext = result.output;
-
+    // Loop through cycles
+    for (let cycle = 1; cycle <= cycles; cycle++) {
+      if (isLoopMode) {
         setChatMessages(prev => [
           ...prev,
-          { 
-            sender: 'agent', 
-            agentName: agent.name, 
-            text: result.output,
-            simulated: result.simulated
+          { sender: 'agent', agentName: 'Sistema', text: `🔄 [Ciclo ${cycle}/2] Iniciando procesamiento y refinamiento en cadena...` }
+        ]);
+      }
+
+      setCompletedNodeIds([]);
+
+      // Sequential Asynchronous execution chain
+      for (const nodeId of executionPath) {
+        const agent = agents.find(a => a.id === nodeId);
+        if (!agent) continue;
+
+        setRunningNodeId(nodeId);
+        
+        setChatMessages(prev => [
+          ...prev,
+          { sender: 'agent', agentName: 'Sistema', text: `⚡ [Ciclo ${cycle}] Agente "${agent.name}" procesando...` }
+        ]);
+
+        try {
+          const response = await fetch('/api/execute', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              prompt: userPrompt,
+              systemInstruction: agent.agentContent,
+              memory: agent.memoryContent,
+              context: currentContext,
+              agentName: agent.name
+            })
+          });
+
+          const result = await response.json();
+
+          if (result.error) {
+            throw new Error(result.error);
           }
-        ]);
 
-        setCompletedNodeIds(prev => [...prev, nodeId]);
-      } catch (err) {
-        console.error('Error executing agent', nodeId, err);
-        setChatMessages(prev => [
-          ...prev,
-          { sender: 'agent', agentName: agent.name, text: `❌ Error al ejecutar el agente: ${err.message}` }
-        ]);
-        break;
+          currentContext = result.output;
+
+          setChatMessages(prev => [
+            ...prev,
+            { 
+              sender: 'agent', 
+              agentName: agent.name, 
+              text: `[Ciclo ${cycle}] \n\n${result.output}`,
+              simulated: result.simulated
+            }
+          ]);
+
+          setCompletedNodeIds(prev => [...prev, nodeId]);
+        } catch (err) {
+          console.error('Error executing agent', nodeId, err);
+          setChatMessages(prev => [
+            ...prev,
+            { sender: 'agent', agentName: agent.name, text: `❌ Error al ejecutar el agente: ${err.message}` }
+          ]);
+          break;
+        }
       }
     }
 
@@ -465,7 +482,7 @@ export default function Home() {
     setIsChatExecuting(false);
     setChatMessages(prev => [
       ...prev,
-      { sender: 'agent', agentName: 'Sistema', text: '✅ Secuencia completada con éxito.' }
+      { sender: 'agent', agentName: 'Sistema', text: '✅ Secuencia en bucle completada con éxito.' }
     ]);
   };
 
@@ -513,6 +530,11 @@ export default function Home() {
           <button className="btn btn-secondary" onClick={handleExport} style={{ border: '1px solid var(--accent-indigo)' }}>
             <Share2 size={16} color="var(--accent-indigo)" />
             Exportar a Claude
+          </button>
+
+          <button className="btn btn-secondary" onClick={() => setIsConceptModalOpen(true)} style={{ border: '1px solid var(--accent-emerald)' }}>
+            <HelpCircle size={16} color="var(--accent-emerald)" />
+            ¿Qué es un Agente?
           </button>
           
           <button 
@@ -575,6 +597,19 @@ export default function Home() {
               </div>
 
               <form onSubmit={handleSendChatMessage} className="chat-console-input-row">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginRight: '8px' }}>
+                  <label className="switch" title="Modo Bucle: Ejecuta la cadena de agentes 2 veces seguidas para que se refinen e iteren entre sí.">
+                    <input
+                      type="checkbox"
+                      checked={isLoopMode}
+                      onChange={(e) => setIsLoopMode(e.target.checked)}
+                      disabled={isChatExecuting}
+                    />
+                    <span className="slider"></span>
+                  </label>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Modo Bucle</span>
+                </div>
+
                 <input
                   type="text"
                   className="chat-input"
@@ -713,6 +748,71 @@ export default function Home() {
               >
                 <Download size={16} />
                 Descargar .md
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Concept Modal Overlay (What is an Agent) */}
+      {isConceptModalOpen && (
+        <div className="overlay">
+          <div className="modal glass" style={{ width: '650px', maxHeight: '85vh', display: 'flex', flexDirection: 'column', padding: '28px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <HelpCircle size={22} color="var(--accent-emerald)" />
+                ¿Qué es un Agente de IA y cómo se utiliza?
+              </h3>
+              <button 
+                type="button" 
+                className="btn-icon" 
+                onClick={() => setIsConceptModalOpen(false)}
+              >
+                <Plus style={{ transform: 'rotate(45deg)' }} size={18} />
+              </button>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', paddingRight: '8px', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+              <div>
+                <h4 style={{ color: 'var(--text-primary)', fontSize: '0.95rem', fontWeight: '700', marginBottom: '6px' }}>🤖 1. La Definición de "Agente de IA"</h4>
+                <p>
+                  A diferencia de un Chat normal (como ChatGPT o Claude tradicional) que responde de forma lineal, un <strong>Agente de IA</strong> es un sistema de software autónomo y especializado. Se caracteriza por disponer de cuatro elementos clave:
+                </p>
+                <ul style={{ marginLeft: '20px', marginTop: '6px', listStyleType: 'disc' }}>
+                  <li><strong>Rol / Directivas:</strong> Instrucciones estrictas sobre cómo pensar y actuar (ej. *"Eres un programador pragmático y detestas el código repetitivo"*).</li>
+                  <li><strong>Memoria de Largo Plazo:</strong> El archivo <code>memory.md</code>, donde el agente almacena conocimientos que aprende de ejecuciones pasadas para no repetir fallos.</li>
+                  <li><strong>Herramientas (MCPs):</strong> Permisos para ejecutar acciones externas (ej. leer o escribir en tu disco duro real, consultar Google Search o editar Figma).</li>
+                  <li><strong>Autonomía:</strong> Decide cómo descomponer y ejecutar tu tarea sin tu intervención constante.</li>
+                </ul>
+              </div>
+
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '12px' }}>
+                <h4 style={{ color: 'var(--text-primary)', fontSize: '0.95rem', fontWeight: '700', marginBottom: '6px' }}>🗺️ 2. ¿Por qué los conectamos en un Canvas?</h4>
+                <p>
+                  Los humanos resolvemos problemas complejos dividiendo el trabajo. En el Canvas visual, cada nodo es un especialista diferente. Al conectarlos con líneas, defines un <strong>Pipeline de Orquestación</strong>. 
+                </p>
+                <p style={{ marginTop: '4px' }}>
+                  Cuando mandas una tarea en el chat inferior, se calcula el orden de entrega. El agente 1 diseña la idea, le pasa el entregable al agente 2 quien programa el código, logrando un flujo de entrega (handoff) profesional que supera por mucho a las respuestas de una IA genérica.
+                </p>
+              </div>
+
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '12px' }}>
+                <h4 style={{ color: 'var(--text-primary)', fontSize: '0.95rem', fontWeight: '700', marginBottom: '6px' }}>🔄 3. El Superpoder del "Modo Bucle" (Loops)</h4>
+                <p>
+                  ¿Qué diferencia a los agentes avanzados? **La Iteración.** Un humano rara vez escribe un código o diseño perfecto al primer intento; normalmente escribe, lo prueba, encuentra fallos y lo corrige.
+                </p>
+                <p style={{ marginTop: '4px' }}>
+                  Al activar el <strong>Modo Bucle</strong> en el chat inferior, la secuencia se ejecuta en **múltiples ciclos**. En el ciclo 1, el equipo de agentes propone una solución. En el ciclo 2, la cadena empieza de nuevo tomando el resultado final y refinándolo, buscando fallos, optimizando el rendimiento y puliendo detalles de forma autónoma.
+                </p>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '15px' }}>
+              <button 
+                type="button" 
+                className="btn" 
+                onClick={() => setIsConceptModalOpen(false)}
+              >
+                Entendido, ¡a probar!
               </button>
             </div>
           </div>
