@@ -16,7 +16,8 @@ const AgentCanvas = ({
   onNodesChange, 
   onEdgesChange, 
   onConnect, 
-  onNodeClick 
+  onNodeClick,
+  onEdgeDoubleClick
 }) => {
   const nodeTypes = useMemo(() => ({ agentNode: AgentNode }), []);
 
@@ -30,6 +31,7 @@ const AgentCanvas = ({
         onConnect={onConnect}
         nodeTypes={nodeTypes}
         onNodeClick={onNodeClick}
+        onEdgeDoubleClick={onEdgeDoubleClick}
         fitView
         colorMode="dark"
       >

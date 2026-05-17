@@ -13,7 +13,11 @@ import {
   FolderOpen, 
   RefreshCw, 
   Save, 
-  Layers 
+  Layers,
+  Share2,
+  Copy,
+  Check,
+  Download
 } from 'lucide-react';
 
 import AgentCanvas from '@/components/AgentCanvas';
@@ -36,6 +40,11 @@ export default function Home() {
   const [newAgentRole, setNewAgentRole] = useState('');
   const [newAgentInst, setNewAgentInst] = useState('');
   const [newAgentMem, setNewAgentMem] = useState('');
+
+  // Export to Claude Modal
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [compiledWorkflow, setCompiledWorkflow] = useState('');
+  const [copied, setCopied] = useState(false);
 
   // Fetch agents data
   const fetchData = async () => {
@@ -126,6 +135,18 @@ export default function Home() {
       };
       setEdges((eds) => {
         const updatedEdges = addEdge(formattedConnection, eds);
+        saveGraphLayout(nodes, updatedEdges);
+        return updatedEdges;
+      });
+    },
+    [nodes]
+  );
+
+  // Edge Double Click Handler (Delete Connection)
+  const onEdgeDoubleClick = useCallback(
+    (event, edge) => {
+      setEdges((eds) => {
+        const updatedEdges = eds.filter(e => e.id !== edge.id);
         saveGraphLayout(nodes, updatedEdges);
         return updatedEdges;
       });
@@ -229,6 +250,62 @@ export default function Home() {
     }
   };
 
+  // Compile and Export Workflow
+  const handleExport = () => {
+    let output = `# 🤖 ORQUESTACIÓN DE AGENTES: WORKSPACE FLOW\n`;
+    output += `Este archivo consolida las instrucciones de tu red de agentes y su mapa de conexiones para importarlo directamente en tu Proyecto de Claude o pasárselo en un prompt inicial de orquestación.\n\n`;
+    
+    output += `## 🗺️ MAPA DE CONEXIONES Y FLUJOS\n`;
+    if (edges.length === 0) {
+      output += `Actualmente no hay conexiones explícitas dibujadas en el canvas. Los agentes actúan de manera aislada.\n\n`;
+    } else {
+      output += `A continuación se detalla la red de comunicación establecida en tu Canvas visual. Cuando trabajes en Claude, pídele que respete esta cadena de entrega:\n`;
+      edges.forEach(edge => {
+        const sourceAgent = agents.find(a => a.id === edge.source);
+        const targetAgent = agents.find(a => a.id === edge.target);
+        if (sourceAgent && targetAgent) {
+          output += `- **${sourceAgent.name}** (ID: \`${edge.source}\`) ➔ entrega sus outputs a ➔ **${targetAgent.name}** (ID: \`${edge.target}\`)\n`;
+        }
+      });
+      output += `\n`;
+    }
+    
+    output += `\n---\n\n`;
+    output += `## 👥 DIRECTIVAS Y ROLES DE LOS AGENTES\n\n`;
+    
+    agents.forEach((agent, i) => {
+      output += `### ${i + 1}. ${agent.name} (ID: \`${agent.id}\`)\n`;
+      output += `#### 📝 Instrucciones del Sistema:\n`;
+      output += `${agent.agentContent || 'Sin instrucciones.'}\n\n`;
+      if (agent.memoryContent && agent.memoryContent.trim()) {
+        output += `#### 🧠 Memoria y Contexto Acumulado:\n`;
+        output += `${agent.memoryContent}\n\n`;
+      }
+      output += `\n---\n\n`;
+    });
+    
+    setCompiledWorkflow(output);
+    setIsExportModalOpen(true);
+  };
+
+  // Copy compiled workflow to clipboard
+  const handleCopyClipboard = () => {
+    navigator.clipboard.writeText(compiledWorkflow);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Download compiled workflow as file
+  const handleDownloadFile = () => {
+    const element = document.createElement("a");
+    const file = new Blob([compiledWorkflow], {type: 'text/plain'});
+    element.href = URL.createObjectURL(file);
+    element.download = "compiled_workspace_flow.md";
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+  };
+
   return (
     <div className="app-container">
       {/* Upper Navigation Header */}
@@ -269,6 +346,11 @@ export default function Home() {
             <Plus size={16} />
             Nuevo Agente
           </button>
+
+          <button className="btn btn-secondary" onClick={handleExport} style={{ border: '1px solid var(--accent-indigo)' }}>
+            <Share2 size={16} color="var(--accent-indigo)" />
+            Exportar a Claude
+          </button>
           
           <button 
             className={`btn-icon ${isGuideOpen ? 'active' : ''}`}
@@ -287,6 +369,7 @@ export default function Home() {
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onNodeClick={onNodeClick}
+          onEdgeDoubleClick={onEdgeDoubleClick}
         />
 
         {/* Right Side Editing Panel */}
@@ -374,6 +457,55 @@ export default function Home() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Export to Claude Modal Overlay */}
+      {isExportModalOpen && (
+        <div className="overlay">
+          <div className="modal glass" style={{ width: '700px', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="modal-header">
+              <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Share2 size={20} color="var(--accent-indigo)" />
+                Exportar Workspace a Claude
+              </h3>
+              <button 
+                type="button" 
+                className="btn-icon" 
+                onClick={() => setIsExportModalOpen(false)}
+              >
+                <Plus style={{ transform: 'rotate(45deg)' }} size={18} />
+              </button>
+            </div>
+
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+              Hemos compilado las instrucciones y memoria de todos tus agentes junto con el mapa de flujos que diseñaste. Súbelo a un <strong>Proyecto de Claude</strong> o úsalo como prompt inicial.
+            </p>
+
+            <div style={{ flex: 1, overflowY: 'auto', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '8px', padding: '16px', fontFamily: 'monospace', fontSize: '0.8rem', whiteSpace: 'pre-wrap', color: 'var(--text-secondary)' }}>
+              {compiledWorkflow}
+            </div>
+
+            <div className="modal-footer" style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '15px' }}>
+              <button 
+                type="button" 
+                className="btn btn-secondary" 
+                onClick={handleCopyClipboard}
+              >
+                {copied ? <Check size={16} color="var(--accent-emerald)" /> : <Copy size={16} />}
+                {copied ? '¡Copiado!' : 'Copiar Portapapeles'}
+              </button>
+
+              <button 
+                type="button" 
+                className="btn" 
+                onClick={handleDownloadFile}
+              >
+                <Download size={16} />
+                Descargar .md
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
