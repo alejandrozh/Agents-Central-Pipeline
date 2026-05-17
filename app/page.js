@@ -99,8 +99,17 @@ export default function Home() {
         };
       });
 
+      // Map loaded edges to ensure they always have sourceHandle and targetHandle defined (safeguard for multiple handles)
+      const mappedEdges = (savedGraph.edges || []).map(edge => ({
+        ...edge,
+        sourceHandle: edge.sourceHandle || 'bottom',
+        targetHandle: edge.targetHandle || 'top',
+        animated: edge.animated !== undefined ? edge.animated : true,
+        style: edge.style || { stroke: '#8b5cf6' }
+      }));
+
       setNodes(newNodes);
-      setEdges(savedGraph.edges || []);
+      setEdges(mappedEdges);
     } catch (e) {
       console.error('Failed to fetch agents data', e);
     }
@@ -118,8 +127,10 @@ export default function Home() {
         // Save positions to graph.json on drag stop (when changes include a position reset or dragging ends)
         const isDragEnd = changes.some(c => c.type === 'position' && !c.dragging);
         if (isDragEnd) {
-          // Trigger saving graph layout in background
-          saveGraphLayout(updatedNodes, edges);
+          // Trigger saving graph layout in background outside render phase
+          setTimeout(() => {
+            saveGraphLayout(updatedNodes, edges);
+          }, 0);
         }
         return updatedNodes;
       });
@@ -132,7 +143,9 @@ export default function Home() {
     (changes) => {
       setEdges((eds) => {
         const updatedEdges = applyEdgeChanges(changes, eds);
-        saveGraphLayout(nodes, updatedEdges);
+        setTimeout(() => {
+          saveGraphLayout(nodes, updatedEdges);
+        }, 0);
         return updatedEdges;
       });
     },
@@ -149,7 +162,9 @@ export default function Home() {
       };
       setEdges((eds) => {
         const updatedEdges = addEdge(formattedConnection, eds);
-        saveGraphLayout(nodes, updatedEdges);
+        setTimeout(() => {
+          saveGraphLayout(nodes, updatedEdges);
+        }, 0);
         return updatedEdges;
       });
     },
@@ -161,7 +176,9 @@ export default function Home() {
     (event, edge) => {
       setEdges((eds) => {
         const updatedEdges = eds.filter(e => e.id !== edge.id);
-        saveGraphLayout(nodes, updatedEdges);
+        setTimeout(() => {
+          saveGraphLayout(nodes, updatedEdges);
+        }, 0);
         return updatedEdges;
       });
     },
