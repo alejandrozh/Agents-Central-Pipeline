@@ -17,7 +17,8 @@ import {
   Share2,
   Copy,
   Check,
-  Download
+  Download,
+  ShieldAlert
 } from 'lucide-react';
 
 import AgentCanvas from '@/components/AgentCanvas';
@@ -398,50 +399,26 @@ export default function Home() {
     return order;
   };
 
-  const handleSendChatMessage = async (e) => {
-    e.preventDefault();
-    if (!chatInput.trim() || isChatExecuting) return;
+  const [pendingApproval, setPendingApproval] = useState(null);
 
-    const userPrompt = chatInput;
-    setChatInput('');
-    setChatMessages(prev => [...prev, { sender: 'user', text: userPrompt }]);
-    
-    setIsChatExecuting(true);
-    setCompletedNodeIds([]);
-
-    // Determine execution order
-    const executionPath = getExecutionOrder();
-    
-    if (executionPath.length === 0) {
-      setChatMessages(prev => [
-        ...prev,
-        { sender: 'agent', agentName: 'Sistema', text: '⚠️ No hay agentes disponibles en tu canvas. Crea al menos un agente para poder ejecutar.' }
-      ]);
-      setIsChatExecuting(false);
-      return;
-    }
-
+  // Reusable multi-agent chain execution runner that supports async pauses & continuations
+  const runRemainingPipeline = async (startIndex, startCycle, initialContext, executionPath, userPrompt) => {
+    let currentContext = initialContext;
     const cycles = isLoopMode ? 2 : 1;
-    setChatMessages(prev => [
-      ...prev,
-      { sender: 'agent', agentName: 'Sistema', text: `⚙️ Iniciando secuencia. Se ejecutarán ${executionPath.length} agentes en orden. ${isLoopMode ? '🔄 [Modo Bucle ACTIVO: Se ejecutarán 2 ciclos completos de revisión y optimización]' : ''}` }
-    ]);
 
-    let currentContext = "";
-
-    // Loop through cycles
-    for (let cycle = 1; cycle <= cycles; cycle++) {
-      if (isLoopMode) {
+    for (let cycle = startCycle; cycle <= cycles; cycle++) {
+      if (isLoopMode && startIndex === 0) {
         setChatMessages(prev => [
           ...prev,
           { sender: 'agent', agentName: 'Sistema', text: `🔄 [Ciclo ${cycle}/2] Iniciando procesamiento y refinamiento en cadena...` }
         ]);
       }
 
-      setCompletedNodeIds([]);
+      // Reset start index for subsequent cycles
+      const currentStartIndex = (cycle === startCycle) ? startIndex : 0;
 
-      // Sequential Asynchronous execution chain
-      for (const nodeId of executionPath) {
+      for (let i = currentStartIndex; i < executionPath.length; i++) {
+        const nodeId = executionPath[i];
         const agent = agents.find(a => a.id === nodeId);
         if (!agent) continue;
 
@@ -471,6 +448,27 @@ export default function Home() {
             throw new Error(result.error);
           }
 
+          // INTERCEPT: Requires Approval (Slack / Jira)
+          if (result.requiresApproval) {
+            setChatMessages(prev => [
+              ...prev,
+              { sender: 'agent', agentName: 'Sistema', text: `🚨 [Aprobación Pendiente] El agente "${agent.name}" solicita permiso para ejecutar la herramienta "${result.toolCall.name}".` }
+            ]);
+            
+            setPendingApproval({
+              toolCall: result.toolCall,
+              nodeId,
+              nodeIndex: i,
+              cycle,
+              currentContext,
+              executionPath,
+              userPrompt
+            });
+            
+            // Pause loop execution
+            return; 
+          }
+
           currentContext = result.output;
 
           setChatMessages(prev => [
@@ -490,8 +488,15 @@ export default function Home() {
             ...prev,
             { sender: 'agent', agentName: agent.name, text: `❌ Error al ejecutar el agente: ${err.message}` }
           ]);
-          break;
+          setRunningNodeId(null);
+          setIsChatExecuting(false);
+          return;
         }
+      }
+      
+      // Clear completed nodes indicator at the end of a cycle
+      if (cycle < cycles) {
+        setCompletedNodeIds([]);
       }
     }
 
@@ -499,8 +504,98 @@ export default function Home() {
     setIsChatExecuting(false);
     setChatMessages(prev => [
       ...prev,
-      { sender: 'agent', agentName: 'Sistema', text: '✅ Secuencia en bucle completada con éxito.' }
+      { sender: 'agent', agentName: 'Sistema', text: '✅ Secuencia completada con éxito.' }
     ]);
+  };
+
+  const handleSendChatMessage = async (e) => {
+    e.preventDefault();
+    if (!chatInput.trim() || isChatExecuting) return;
+
+    const userPrompt = chatInput;
+    setChatInput('');
+    setChatMessages(prev => [...prev, { sender: 'user', text: userPrompt }]);
+    
+    setIsChatExecuting(true);
+    setCompletedNodeIds([]);
+
+    const executionPath = getExecutionOrder();
+    
+    if (executionPath.length === 0) {
+      setChatMessages(prev => [
+        ...prev,
+        { sender: 'agent', agentName: 'Sistema', text: '⚠️ No hay agentes disponibles en tu canvas. Crea al menos un agente para poder ejecutar.' }
+      ]);
+      setIsChatExecuting(false);
+      return;
+    }
+
+    setChatMessages(prev => [
+      ...prev,
+      { sender: 'agent', agentName: 'Sistema', text: `⚙️ Iniciando secuencia. Se ejecutarán ${executionPath.length} agentes en orden. ${isLoopMode ? '🔄 [Modo Bucle ACTIVO: Se ejecutarán 2 ciclos completos de revisión e iteración]' : ''}` }
+    ]);
+
+    // Start execution index 0, cycle 1
+    await runRemainingPipeline(0, 1, "", executionPath, userPrompt);
+  };
+
+  const handleApproveAction = async () => {
+    if (!pendingApproval) return;
+    const { toolCall, nodeId, nodeIndex, cycle, currentContext, executionPath, userPrompt } = pendingApproval;
+    
+    setChatMessages(prev => [
+      ...prev,
+      { sender: 'agent', agentName: 'Sistema', text: `✅ [Aprobado] Ejecutando acción: "${toolCall.name}"...` }
+    ]);
+    
+    setPendingApproval(null);
+
+    try {
+      const response = await fetch('/api/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          isMockApprovalAction: true,
+          approvedToolName: toolCall.name,
+          approvedToolArgs: toolCall.args,
+          agentName: toolCall.agentName
+        })
+      });
+      const result = await response.json();
+      
+      setChatMessages(prev => [
+        ...prev,
+        { 
+          sender: 'agent', 
+          agentName: toolCall.agentName, 
+          text: result.output,
+          simulated: result.simulated
+        }
+      ]);
+
+      // Resume pipeline on the next node
+      const nextIndex = nodeIndex + 1;
+      await runRemainingPipeline(nextIndex, cycle, result.output, executionPath, userPrompt);
+    } catch (err) {
+      console.error('Error executing approved action', err);
+      setChatMessages(prev => [
+        ...prev,
+        { sender: 'agent', agentName: 'Sistema', text: `❌ Error al ejecutar acción aprobada: ${err.message}` }
+      ]);
+      setRunningNodeId(null);
+      setIsChatExecuting(false);
+    }
+  };
+
+  const handleRejectAction = () => {
+    if (!pendingApproval) return;
+    setChatMessages(prev => [
+      ...prev,
+      { sender: 'agent', agentName: 'Sistema', text: `❌ [Rechazado] El usuario denegó el permiso para ejecutar "${pendingApproval.toolCall.name}". Secuencia cancelada.` }
+    ]);
+    setPendingApproval(null);
+    setRunningNodeId(null);
+    setIsChatExecuting(false);
   };
 
   return (
@@ -615,6 +710,31 @@ export default function Home() {
                   </div>
                 ))}
               </div>
+
+              {pendingApproval && (
+                <div className="approval-banner glass neon-border" style={{ padding: '12px', margin: '0 16px 8px 16px', borderRadius: '8px', border: '1px solid rgba(234, 179, 8, 0.4)', background: 'rgba(234, 179, 8, 0.05)', display: 'flex', flexDirection: 'column', gap: '8px', boxShadow: '0 4px 20px rgba(0,0,0,0.4)' }}>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                    <ShieldAlert size={18} color="#eab308" style={{ flexShrink: 0, marginTop: '2px' }} />
+                    <div style={{ flex: 1 }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#eab308', textTransform: 'uppercase', letterSpacing: '0.5px' }}>🚨 Aprobación Humana Requerida (HITL)</span>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px', lineHeight: '1.4' }}>
+                        El agente <strong>{pendingApproval.toolCall.agentName}</strong> solicita permiso para ejecutar: <code style={{ color: 'var(--accent-indigo)', padding: '2px 4px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px' }}>{pendingApproval.toolCall.name}</code>.
+                      </p>
+                      <div style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '6px', padding: '8px', fontSize: '0.7rem', fontFamily: 'monospace', whiteSpace: 'pre-wrap', color: 'var(--text-secondary)', marginTop: '6px', maxHeight: '100px', overflowY: 'auto' }}>
+                        {JSON.stringify(pendingApproval.toolCall.args, null, 2)}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', alignSelf: 'flex-end' }}>
+                    <button type="button" className="btn btn-mini btn-success" onClick={handleApproveAction} style={{ background: 'linear-gradient(135deg, var(--accent-emerald), #059669)', border: 'none', color: '#fff', fontSize: '0.7rem', fontWeight: '700', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer' }}>
+                      ✅ Aprobar y Continuar
+                    </button>
+                    <button type="button" className="btn btn-mini btn-danger" onClick={handleRejectAction} style={{ background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#f87171', fontSize: '0.7rem', fontWeight: '700', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer' }}>
+                      ❌ Rechazar Acción
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <form onSubmit={handleSendChatMessage} className="chat-console-input-row">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginRight: '8px' }}>
