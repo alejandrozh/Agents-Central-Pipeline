@@ -471,6 +471,18 @@ export default function Home() {
 
           currentContext = result.output;
 
+          // AUTO-SAVE AGENT MEMORY DYNAMICALLY TO DISK (memory.md)
+          if (result.updatedMemory) {
+            await handleSaveAgent(nodeId, agent.agentContent, result.updatedMemory);
+            setAgents(prevAgents => prevAgents.map(a => 
+              a.id === nodeId ? { ...a, memoryContent: result.updatedMemory } : a
+            ));
+            setChatMessages(prev => [
+              ...prev,
+              { sender: 'agent', agentName: 'Sistema', text: `🧠 [Memoria Actualizada] Guardados nuevos aprendizajes en el archivo "memory.md" del agente "${agent.name}".` }
+            ]);
+          }
+
           setChatMessages(prev => [
             ...prev,
             { 
@@ -519,20 +531,53 @@ export default function Home() {
     setIsChatExecuting(true);
     setCompletedNodeIds([]);
 
-    const executionPath = getExecutionOrder();
+    const rawExecutionPath = getExecutionOrder();
+    
+    // Control: Filter execution path to start from the selected node and its downstream reachable nodes
+    const selectedNodes = nodes.filter(n => n.selected);
+    const activeNodeId = selectedNodes[0]?.id || selectedAgent?.id;
+    
+    let executionPath = rawExecutionPath;
+    
+    if (activeNodeId) {
+      // Find all reachable nodes downstream starting from activeNodeId
+      const reachable = new Set();
+      const queue = [activeNodeId];
+      reachable.add(activeNodeId);
+      
+      while (queue.length > 0) {
+        const curr = queue.shift();
+        edges.forEach(e => {
+          if (e.source === curr && !reachable.has(e.target)) {
+            reachable.add(e.target);
+            queue.push(e.target);
+          }
+        });
+      }
+      
+      // Filter execution order to only include downstream reachable nodes
+      executionPath = rawExecutionPath.filter(id => reachable.has(id));
+    }
     
     if (executionPath.length === 0) {
       setChatMessages(prev => [
         ...prev,
-        { sender: 'agent', agentName: 'Sistema', text: '⚠️ No hay agentes disponibles en tu canvas. Crea al menos un agente para poder ejecutar.' }
+        { sender: 'agent', agentName: 'Sistema', text: '⚠️ No hay agentes en el camino de ejecución seleccionado. Crea o conecta un agente para poder ejecutar.' }
       ]);
       setIsChatExecuting(false);
       return;
     }
 
+    const activeAgentName = agents.find(a => a.id === activeNodeId)?.name;
     setChatMessages(prev => [
       ...prev,
-      { sender: 'agent', agentName: 'Sistema', text: `⚙️ Iniciando secuencia. Se ejecutarán ${executionPath.length} agentes en orden. ${isLoopMode ? '🔄 [Modo Bucle ACTIVO: Se ejecutarán 2 ciclos completos de revisión e iteración]' : ''}` }
+      { 
+        sender: 'agent', 
+        agentName: 'Sistema', 
+        text: activeNodeId 
+          ? `⚙️ [Filtro Activo: Agente "${activeAgentName}"] Iniciando secuencia desde el agente seleccionado. Se ejecutarán ${executionPath.length} agentes. ${isLoopMode ? '🔄 [Modo Bucle ACTIVO]' : ''}`
+          : `⚙️ Iniciando secuencia completa. Se ejecutarán ${executionPath.length} agentes en orden. ${isLoopMode ? '🔄 [Modo Bucle ACTIVO]' : ''}` 
+      }
     ]);
 
     // Start execution index 0, cycle 1
@@ -682,7 +727,7 @@ export default function Home() {
         />
 
         {/* Dynamic Orchestration Chat Console (Slide Up) */}
-        <div className={`chat-console-container glass ${!isGuideOpen ? 'wide-left' : ''} ${!isEditorOpen ? 'wide-right' : ''}`} style={{ height: isChatConsoleOpen ? '280px' : '40px' }}>
+        <div className={`chat-console-container glass ${!isGuideOpen ? 'wide-left' : ''} ${!isEditorOpen ? 'wide-right' : ''}`} style={{ height: isChatConsoleOpen ? (pendingApproval ? '420px' : '280px') : '40px', transition: 'height 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}>
           <div className="chat-console-header" onClick={() => setIsChatConsoleOpen(!isChatConsoleOpen)} style={{ padding: '8px 16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: isChatExecuting ? '#eab308' : '#10b981', boxShadow: isChatExecuting ? '0 0 8px #eab308' : 'none' }}></span>

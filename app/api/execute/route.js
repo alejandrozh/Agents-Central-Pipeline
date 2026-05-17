@@ -259,12 +259,17 @@ export async function POST(request) {
 
       // Auto-run tool simulation for FileSystem
       let mockOutput = '';
+      let mockMemory = `# Memoria de Largo Plazo - ${agentName}\n`;
+      
       if (agentName.toLowerCase().includes('designer')) {
         mockOutput = `### 🎨 Diseño Propuesto por ${agentName}\n` +
           `He analizado tu propuesta. Como especialista de producto, sugiero la siguiente estructura:\n` +
           `1. **Estructura visual:** Un contenedor glassmorphic con bordes redondeados y una sombra suave.\n` +
           `2. **Paleta cromática:** Degradados violeta y azul profundo para dar aspecto de neón premium.\n\n` +
           `*He consultado las guías y todo está validado.*`;
+          
+        mockMemory += `- **Aprendizaje**: Prefiere paletas de color con degradados HSL neón violeta y azul profundo para dar aspecto de alta gama.\n` +
+          `- **Directiva**: Mantener bordes redondeados glassmorphic en todos los contenedores visuales para preservar consistencia.`;
       } else if (agentName.toLowerCase().includes('engineer') || agentName.toLowerCase().includes('programador')) {
         // Physically write a demo file in workspace even under simulation so they see real files!
         try {
@@ -293,15 +298,22 @@ export async function POST(request) {
           `}\n` +
           `\`\`\`\n` +
           `*Listo para su integración en tu editor de código.*`;
+          
+        mockMemory += `- **Aprendizaje**: Integración del botón físico Premium en /workspace/MockPremiumButton.jsx completado con éxito.\n` +
+          `- **Directiva**: Usar transiciones fluidas de 0.3s cubic-bezier para efectos visuales premium y retroalimentación interactiva del usuario.`;
       } else {
         mockOutput = `### 🤖 Respuesta del Agente: ${agentName}\n` +
           `He procesado el prompt: "${prompt}".\n` +
           `Basándome en mis directivas de sistema y memoria de largo plazo, propongo el siguiente flujo de trabajo.\n` +
           `Todo parece correcto para continuar con la secuencia.`;
+          
+        mockMemory += `- **Aprendizaje**: Procesado prompt del usuario: "${prompt}".\n` +
+          `- **Directiva**: Identificado e integrado los entregables previos del contexto en la cadena de procesamiento.`;
       }
 
       return NextResponse.json({ 
         output: mockOutput,
+        updatedMemory: mockMemory,
         simulated: true 
       });
     }
@@ -323,6 +335,13 @@ PETICIÓN ORIGINAL DEL USUARIO:
 "${prompt}"
 
 Por favor, procesa esta información de acuerdo a tu rol. Si requieres escribir un archivo local, buscar en la web, consultar Figma o Notion, invoca a las herramientas asignadas de inmediato.
+
+Al final de tu respuesta de texto final, DEBES incluir obligatoriamente una sección con el delimitador exacto [MEMORIA_ACTUALIZADA] para consolidar lo aprendido, decisiones clave o directivas nuevas acumuladas durante este paso (manteniendo y agregando a la memoria previa).
+
+Formato obligatorio al final de tu respuesta:
+[MEMORIA_ACTUALIZADA]
+# Memoria de Largo Plazo
+- (Aquí pones la lista de tus aprendizajes clave, directivas nuevas y previas acumuladas)
 `;
 
     const contents = [
@@ -403,9 +422,18 @@ Por favor, procesa esta información de acuerdo a tu rol. Si requieres escribir 
       functionCall = parts.find(p => p.functionCall);
     }
 
-    const output = parts.find(p => p.text)?.text || 'Herramienta ejecutada con éxito y registrada en el lienzo.';
+    const rawOutput = parts.find(p => p.text)?.text || 'Herramienta ejecutada con éxito y registrada en el lienzo.';
 
-    return NextResponse.json({ output, simulated: false });
+    let output = rawOutput;
+    let updatedMemory = null;
+
+    const memoryIndex = rawOutput.indexOf('[MEMORIA_ACTUALIZADA]');
+    if (memoryIndex !== -1) {
+      output = rawOutput.substring(0, memoryIndex).trim();
+      updatedMemory = rawOutput.substring(memoryIndex + '[MEMORIA_ACTUALIZADA]'.length).trim();
+    }
+
+    return NextResponse.json({ output, updatedMemory, simulated: false });
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
