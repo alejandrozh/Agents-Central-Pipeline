@@ -57,12 +57,18 @@ const EditorPanel = ({ agent, isOpen, onClose, onSave, onDelete }) => {
       setInstructions(agent.agentContent || '');
       setMemory(agent.memoryContent || '');
       
-      // Parse MCPs from markdown content
+      // Parse MCPs from markdown content or from enabledApps array
       const mcpState = {};
       AVAILABLE_MCPS.forEach(mcp => {
-        const regex = new RegExp(`-\\s*\\[([ xX])\\]\\s*${mcp.name}`, 'i');
-        const match = agent.agentContent?.match(regex);
-        mcpState[mcp.id] = match ? match[1].toLowerCase() === 'x' : false;
+        let isEnabled = false;
+        if (agent.enabledApps && Array.isArray(agent.enabledApps)) {
+          isEnabled = agent.enabledApps.includes(mcp.id);
+        } else {
+          const regex = new RegExp(`-\\s*\\[([ xX])\\]\\s*${mcp.name}`, 'i');
+          const match = agent.agentContent?.match(regex);
+          isEnabled = match ? match[1].toLowerCase() === 'x' : false;
+        }
+        mcpState[mcp.id] = isEnabled;
       });
       setSelectedMcps(mcpState);
     }
@@ -122,7 +128,10 @@ const EditorPanel = ({ agent, isOpen, onClose, onSave, onDelete }) => {
       updatedInstructions = updatedInstructions.trim() + '\n\n' + mcpBlock;
     }
 
-    await onSave(agent.id, updatedInstructions, memory);
+    // Convert selectedMcps map to enabledApps array
+    const enabledApps = Object.keys(selectedMcps).filter(key => selectedMcps[key]);
+
+    await onSave(agent.id, updatedInstructions, memory, enabledApps);
     setIsSaving(false);
   };
 

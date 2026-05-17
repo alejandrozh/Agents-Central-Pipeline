@@ -176,7 +176,7 @@ async function executeTool(name, args) {
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { prompt, systemInstruction, memory, context, agentName, isMockApprovalAction, approvedToolName, approvedToolArgs } = body;
+    const { prompt, systemInstruction, memory, context, agentName, isMockApprovalAction, approvedToolName, approvedToolArgs, enabledApps } = body;
 
     // Handle approved tool execution from HITL confirmation
     if (isMockApprovalAction && approvedToolName) {
@@ -272,9 +272,34 @@ export async function POST(request) {
     if (!apiKey || apiKey === 'tu_clave_aqui' || apiKey.trim() === '') {
       await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate thinking
       
+      const hasSimulatedApp = (appId) => {
+        if (!enabledApps || !Array.isArray(enabledApps) || enabledApps.length === 0) {
+          return true; // Backward compatibility
+        }
+        return enabledApps.includes(appId);
+      };
+
       // Simulate real Human-in-the-Loop interception in simulated environment!
       const isSlackRequest = prompt && (prompt.toLowerCase().includes('slack') || prompt.toLowerCase().includes('mensaje') || prompt.toLowerCase().includes('hola'));
       const isJiraRequest = prompt && (prompt.toLowerCase().includes('jira') || prompt.toLowerCase().includes('ticket') || prompt.toLowerCase().includes('issue'));
+
+      if (isSlackRequest && !hasSimulatedApp('slack')) {
+        return NextResponse.json({
+          output: `### ⚠️ Conexión no Habilitada\n` +
+            `El agente **${agentName}** intentó enviar un mensaje a Slack, pero **no tiene la aplicación de Slack habilitada** en sus conexiones de MCP.\n\n` +
+            `**Solución:** Selecciona al agente en el lienzo, ve a la pestaña **"MCPs (Herramientas)"** en el panel lateral y activa el interruptor de **"Slack Connect"** para concederle este permiso.`,
+          simulated: true
+        });
+      }
+
+      if (isJiraRequest && !hasSimulatedApp('jira')) {
+        return NextResponse.json({
+          output: `### ⚠️ Conexión no Habilitada\n` +
+            `El agente **${agentName}** intentó interactuar con Jira, pero **no tiene la aplicación de Jira habilitada** en sus conexiones de MCP.\n\n` +
+            `**Solución:** Selecciona al agente en el lienzo, ve a la pestaña **"MCPs (Herramientas)"** en el panel lateral y activa el interruptor de **"Jira Management"** para concederle este permiso.`,
+          simulated: true
+        });
+      }
 
       if ((agentName.toLowerCase().includes('marketing') || isSlackRequest) && !isMockApprovalAction) {
         let slackMessage = `📣 *Mensaje en vivo de ${agentName}*:\nUn saludo especial enviado de verdad desde tu lienzo de Agents Central Pipeline.`;
@@ -405,6 +430,41 @@ Formato obligatorio al final de tu respuesta:
       }
     ];
 
+    // Filter active tools based on enabledApps array
+    let activeDeclarations = [];
+    
+    const hasApp = (appId) => {
+      // If enabledApps is not passed or empty, default to giving access to everything (backward compatibility)
+      if (!enabledApps || !Array.isArray(enabledApps) || enabledApps.length === 0) {
+        return true;
+      }
+      return enabledApps.includes(appId);
+    };
+
+    tools[0].functionDeclarations.forEach(decl => {
+      let isEnabled = false;
+      
+      if (decl.name.startsWith('filesystem_')) {
+        isEnabled = true; // Always enable filesystem core tools
+      } else if (decl.name === 'google_web_search') {
+        isEnabled = hasApp('google-search');
+      } else if (decl.name === 'notion_create_page') {
+        isEnabled = hasApp('notion');
+      } else if (decl.name === 'figma_get_document') {
+        isEnabled = hasApp('figma-dev-mode') || hasApp('figma-live');
+      } else if (decl.name === 'slack_post_message') {
+        isEnabled = hasApp('slack');
+      } else if (decl.name === 'jira_create_issue') {
+        isEnabled = hasApp('jira');
+      }
+      
+      if (isEnabled) {
+        activeDeclarations.push(decl);
+      }
+    });
+
+    const activeTools = activeDeclarations.length > 0 ? [{ functionDeclarations: activeDeclarations }] : undefined;
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -412,7 +472,7 @@ Formato obligatorio al final de tu respuesta:
       },
       body: JSON.stringify({
         contents,
-        tools
+        tools: activeTools
       })
     });
 

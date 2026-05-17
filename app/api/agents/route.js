@@ -43,10 +43,18 @@ function getAgentsData() {
         const titleMatch = agentContent.match(/^#\s+(.+)$/m);
         const name = titleMatch ? titleMatch[1].trim() : agentFile.replace('.md', '').replace(/_/g, ' ');
 
-        // Extract basic metadata like active MCPs if configured in the markdown
-        // For now, let's parse MCPs list from the MD or just look for a section
-        // We'll also allow custom JSON configuration inside the markdown or parsed from headers.
-        
+        // Parse metadata/config comment if present at the end of the markdown
+        let enabledApps = [];
+        const configMatch = agentContent.match(/<!--\s*CONFIG:\s*(\{[\s\S]*?\})\s*-->/);
+        if (configMatch) {
+          try {
+            const configObj = JSON.parse(configMatch[1]);
+            enabledApps = configObj.enabledApps || [];
+          } catch (e) {
+            console.error('Failed to parse agent config metadata', e);
+          }
+        }
+
         agents.push({
           id: item, // folder name serves as ID (e.g., '01_product_designer_agent')
           name,
@@ -55,6 +63,7 @@ function getAgentsData() {
           agentContent,
           memoryContent,
           path: agentFilePath,
+          enabledApps
         });
       }
     }
@@ -119,7 +128,7 @@ export async function POST(request) {
       // Write agent file
       const agentFileName = `${safeName}.md`;
       const agentFilePath = path.join(newAgentDir, agentFileName);
-      const agentContent = `# ${role || name}\n\n## Objetivo\n${instructions || 'Define el objetivo aquí.'}\n`;
+      const agentContent = `# ${role || name}\n\n## Objetivo\n${instructions || 'Define el objetivo aquí.'}\n\n<!-- CONFIG: {"enabledApps": []} -->\n`;
       fs.writeFileSync(agentFilePath, agentContent, 'utf-8');
       
       // Write memory file

@@ -4,11 +4,22 @@ import path from 'path';
 
 const AGENTS_DIR = 'C:\\Users\\aleja\\Documents\\Claude\\Agents_central';
 
+function updateConfigInMarkdown(content, enabledApps) {
+  const configObj = { enabledApps };
+  const commentStr = `\n\n<!-- CONFIG: ${JSON.stringify(configObj)} -->\n`;
+  
+  if (content.match(/<!--\s*CONFIG:\s*(\{[\s\S]*?\})\s*-->/)) {
+    return content.replace(/<!--\s*CONFIG:\s*(\{[\s\S]*?\})\s*-->/, `<!-- CONFIG: ${JSON.stringify(configObj)} -->`);
+  } else {
+    return content.trim() + commentStr;
+  }
+}
+
 export async function PUT(request, { params }) {
   try {
     const { id } = params; // E.g., '01_product_designer_agent'
     const body = await request.json();
-    const { agentContent, memoryContent } = body;
+    const { agentContent, memoryContent, enabledApps } = body;
 
     const agentDir = path.join(AGENTS_DIR, id);
     if (!fs.existsSync(agentDir)) {
@@ -28,9 +39,18 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ error: 'Agent markdown file not found' }, { status: 404 });
     }
 
-    // Write updated agent content
-    if (agentContent !== undefined) {
-      fs.writeFileSync(path.join(agentDir, agentFile), agentContent, 'utf-8');
+    const agentFilePath = path.join(agentDir, agentFile);
+    const currentContent = fs.readFileSync(agentFilePath, 'utf-8');
+    
+    let finalAgentContent = agentContent !== undefined ? agentContent : currentContent;
+
+    if (enabledApps !== undefined) {
+      finalAgentContent = updateConfigInMarkdown(finalAgentContent, enabledApps);
+    }
+
+    // Write updated agent content or updated apps
+    if (agentContent !== undefined || enabledApps !== undefined) {
+      fs.writeFileSync(agentFilePath, finalAgentContent, 'utf-8');
     }
 
     // Write updated memory content

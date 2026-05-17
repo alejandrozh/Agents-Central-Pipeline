@@ -215,19 +215,28 @@ export default function Home() {
     }
   };
 
-  // Save Agent edits (instructions & memory)
-  const handleSaveAgent = async (agentId, updatedContent, updatedMemory) => {
+  // Save Agent edits (instructions & memory, and enabled apps)
+  const handleSaveAgent = async (agentId, updatedContent, updatedMemory, enabledApps) => {
     try {
       const res = await fetch(`/api/agents/${agentId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agentContent: updatedContent, memoryContent: updatedMemory })
+        body: JSON.stringify({ 
+          agentContent: updatedContent, 
+          memoryContent: updatedMemory,
+          enabledApps
+        })
       });
       const data = await res.json();
       if (data.success) {
         await fetchData(); // Refresh visual nodes
         // Update selected agent state
-        setSelectedAgent(prev => prev ? { ...prev, agentContent: updatedContent, memoryContent: updatedMemory } : null);
+        setSelectedAgent(prev => prev ? { 
+          ...prev, 
+          agentContent: updatedContent, 
+          memoryContent: updatedMemory,
+          enabledApps: enabledApps !== undefined ? enabledApps : prev.enabledApps
+        } : null);
       }
     } catch (e) {
       console.error('Failed to save agent contents', e);
@@ -438,7 +447,8 @@ export default function Home() {
               systemInstruction: agent.agentContent,
               memory: agent.memoryContent,
               context: currentContext,
-              agentName: agent.name
+              agentName: agent.name,
+              enabledApps: agent.enabledApps || []
             })
           });
 
