@@ -159,11 +159,18 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
   font-family: var(--font-body);
-  padding: 16px;
+  padding: 0 !important; /* Set to 0 to align custom handles on physical borders */
   width: 240px;
   box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(10px);
   transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.agent-node-inner {
+  padding: 16px;
+  position: relative;
+  width: 100%;
+  height: 100%;
 }
 
 .react-flow__node:hover {
