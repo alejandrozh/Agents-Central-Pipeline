@@ -46,6 +46,16 @@ export default function Home() {
   const [compiledWorkflow, setCompiledWorkflow] = useState('');
   const [copied, setCopied] = useState(false);
 
+  // Chat Console States
+  const [chatMessages, setChatMessages] = useState([
+    { sender: 'agent', agentName: 'Sistema', text: '👋 ¡Hola! Soy tu Consola de Orquestación en Vivo.\n\nConecta algunos agentes en el canvas, escribe tu instrucción en el chat y presiona "Enviar". Verás a tus agentes trabajar en cadena, iluminándose en amarillo en tiempo real mientras procesan y pasándose la información de uno a otro automáticamente. 🚀' }
+  ]);
+  const [chatInput, setChatInput] = useState('');
+  const [runningNodeId, setRunningNodeId] = useState(null);
+  const [completedNodeIds, setCompletedNodeIds] = useState([]);
+  const [isChatConsoleOpen, setIsChatConsoleOpen] = useState(true);
+  const [isChatExecuting, setIsChatExecuting] = useState(false);
+
   // Fetch agents data
   const fetchData = async () => {
     try {
@@ -306,6 +316,159 @@ export default function Home() {
     document.body.removeChild(element);
   };
 
+  // Dynamic visual feedback synchronization for nodes
+  useEffect(() => {
+    setNodes((prevNodes) =>
+      prevNodes.map((node) => {
+        const isRunning = runningNodeId === node.id;
+        const isCompleted = completedNodeIds.includes(node.id);
+        return {
+          ...node,
+          className: isRunning ? 'node-running' : isCompleted ? 'node-completed' : '',
+          data: {
+            ...node.data,
+            status: isRunning ? 'running' : isCompleted ? 'completed' : 'idle',
+          },
+        };
+      })
+    );
+  }, [runningNodeId, completedNodeIds, agents]);
+
+  // Simple topological sort for execution path
+  const getExecutionOrder = () => {
+    const inDegree = {};
+    const adj = {};
+    
+    // Initialize
+    nodes.forEach(n => {
+      inDegree[n.id] = 0;
+      adj[n.id] = [];
+    });
+    
+    // Build adjacency list & in-degrees
+    edges.forEach(e => {
+      if (adj[e.source] && inDegree[e.target] !== undefined) {
+        adj[e.source].push(e.target);
+        inDegree[e.target]++;
+      }
+    });
+    
+    // Queue for nodes with in-degree 0
+    const queue = [];
+    nodes.forEach(n => {
+      if (inDegree[n.id] === 0) {
+        queue.push(n.id);
+      }
+    });
+    
+    const order = [];
+    while (queue.length > 0) {
+      const u = queue.shift();
+      order.push(u);
+      
+      adj[u]?.forEach(v => {
+        inDegree[v]--;
+        if (inDegree[v] === 0) {
+          queue.push(v);
+        }
+      });
+    }
+    
+    return order;
+  };
+
+  const handleSendChatMessage = async (e) => {
+    e.preventDefault();
+    if (!chatInput.trim() || isChatExecuting) return;
+
+    const userPrompt = chatInput;
+    setChatInput('');
+    setChatMessages(prev => [...prev, { sender: 'user', text: userPrompt }]);
+    
+    setIsChatExecuting(true);
+    setCompletedNodeIds([]);
+
+    // Determine execution order
+    const executionPath = getExecutionOrder();
+    
+    if (executionPath.length === 0) {
+      setChatMessages(prev => [
+        ...prev,
+        { sender: 'agent', agentName: 'Sistema', text: '⚠️ No hay agentes disponibles en tu canvas. Crea al menos un agente para poder ejecutar.' }
+      ]);
+      setIsChatExecuting(false);
+      return;
+    }
+
+    setChatMessages(prev => [
+      ...prev,
+      { sender: 'agent', agentName: 'Sistema', text: `⚙️ Iniciando secuencia. Se ejecutarán ${executionPath.length} agentes en orden según sus conexiones.` }
+    ]);
+
+    let currentContext = "";
+
+    // Sequential Asynchronous execution chain
+    for (const nodeId of executionPath) {
+      const agent = agents.find(a => a.id === nodeId);
+      if (!agent) continue;
+
+      setRunningNodeId(nodeId);
+      
+      setChatMessages(prev => [
+        ...prev,
+        { sender: 'agent', agentName: 'Sistema', text: `⚡ Agente "${agent.name}" procesando...` }
+      ]);
+
+      try {
+        const response = await fetch('/api/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: userPrompt,
+            systemInstruction: agent.agentContent,
+            memory: agent.memoryContent,
+            context: currentContext,
+            agentName: agent.name
+          })
+        });
+
+        const result = await response.json();
+
+        if (result.error) {
+          throw new Error(result.error);
+        }
+
+        currentContext = result.output;
+
+        setChatMessages(prev => [
+          ...prev,
+          { 
+            sender: 'agent', 
+            agentName: agent.name, 
+            text: result.output,
+            simulated: result.simulated
+          }
+        ]);
+
+        setCompletedNodeIds(prev => [...prev, nodeId]);
+      } catch (err) {
+        console.error('Error executing agent', nodeId, err);
+        setChatMessages(prev => [
+          ...prev,
+          { sender: 'agent', agentName: agent.name, text: `❌ Error al ejecutar el agente: ${err.message}` }
+        ]);
+        break;
+      }
+    }
+
+    setRunningNodeId(null);
+    setIsChatExecuting(false);
+    setChatMessages(prev => [
+      ...prev,
+      { sender: 'agent', agentName: 'Sistema', text: '✅ Secuencia completada con éxito.' }
+    ]);
+  };
+
   return (
     <div className="app-container">
       {/* Upper Navigation Header */}
@@ -380,6 +543,53 @@ export default function Home() {
           onSave={handleSaveAgent}
           onDelete={handleDeleteAgent}
         />
+
+        {/* Dynamic Orchestration Chat Console (Slide Up) */}
+        <div className={`chat-console-container glass ${!isGuideOpen ? 'wide-left' : ''} ${!isEditorOpen ? 'wide-right' : ''}`} style={{ height: isChatConsoleOpen ? '380px' : '48px' }}>
+          <div className="chat-console-header" onClick={() => setIsChatConsoleOpen(!isChatConsoleOpen)}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: isChatExecuting ? '#eab308' : '#10b981', boxShadow: isChatExecuting ? '0 0 8px #eab308' : 'none' }}></span>
+              <span style={{ fontWeight: '600', fontSize: '0.85rem', letterSpacing: '0.5px' }}>
+                {isChatExecuting ? 'Ejecutando orquestación...' : 'Consola de Orquestación en Vivo'}
+              </span>
+            </div>
+            <button className="btn-icon" style={{ width: '24px', height: '24px', background: 'transparent', border: 'none' }}>
+              <Plus style={{ transform: isChatConsoleOpen ? 'rotate(45deg)' : 'none', transition: 'transform 0.2s', color: 'var(--text-secondary)' }} size={14} />
+            </button>
+          </div>
+
+          {isChatConsoleOpen && (
+            <>
+              <div className="chat-console-body">
+                {chatMessages.map((msg, i) => (
+                  <div key={i} className={`chat-bubble ${msg.sender}`}>
+                    {msg.sender === 'agent' && (
+                      <div style={{ fontWeight: '700', fontSize: '0.75rem', marginBottom: '4px', color: 'var(--accent-indigo)', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>{msg.agentName}</span>
+                        {msg.simulated && <span style={{ color: '#eab308', fontSize: '0.65rem' }}>Simulado</span>}
+                      </div>
+                    )}
+                    <div style={{ fontSize: '0.8rem', whiteSpace: 'pre-wrap' }}>{msg.text}</div>
+                  </div>
+                ))}
+              </div>
+
+              <form onSubmit={handleSendChatMessage} className="chat-console-input-row">
+                <input
+                  type="text"
+                  className="chat-input"
+                  placeholder={isChatExecuting ? "Esperando respuesta de agentes..." : "Escribe una instrucción para tus agentes conectados..."}
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  disabled={isChatExecuting}
+                />
+                <button type="submit" className="btn" style={{ borderRadius: '20px', padding: '6px 16px' }} disabled={isChatExecuting || !chatInput.trim()}>
+                  {isChatExecuting ? 'Corriendo...' : 'Enviar'}
+                </button>
+              </form>
+            </>
+          )}
+        </div>
       </main>
 
       {/* Create Agent Modal Overlay */}

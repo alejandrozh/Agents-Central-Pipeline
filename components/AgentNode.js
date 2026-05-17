@@ -42,8 +42,14 @@ const AgentNode = ({ data }) => {
       
       <div className="node-footer">
         <div className="node-mcp-status">
-          <span className="status-dot"></span>
-          <span>Active MCPs</span>
+          <span 
+            className="status-dot" 
+            style={{ 
+              backgroundColor: data.status === 'running' ? '#eab308' : (data.status === 'completed' ? '#10b981' : '#6366f1'),
+              boxShadow: data.status === 'running' ? '0 0 8px #eab308' : 'none'
+            }}
+          ></span>
+          <span>{data.status === 'running' ? 'Procesando...' : (data.status === 'completed' ? 'Completado' : 'Listo')}</span>
         </div>
         <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
           <Layers size={10} />
