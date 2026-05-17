@@ -24,13 +24,40 @@ const EditorPanel = ({ agent, isOpen, onClose, onSave, onDelete }) => {
   const [selectedMcps, setSelectedMcps] = useState({});
   const [isSaving, setIsSaving] = useState(false);
 
+  // Credentials and MCP Connection states
+  const [mcpStatus, setMcpStatus] = useState({});
+  const [credentials, setCredentials] = useState({
+    GEMINI_API_KEY: '',
+    FIGMA_API_TOKEN: '',
+    GOOGLE_SEARCH_KEY: '',
+    GITHUB_TOKEN: '',
+    NOTION_API_TOKEN: '',
+    SLACK_WEBHOOK_URL: '',
+    JIRA_API_TOKEN: '',
+    JIRA_WORKSPACE_URL: '',
+  });
+  const [activeMcpConfig, setActiveMcpConfig] = useState(null);
+  const [isSavingCreds, setIsSavingCreds] = useState(false);
+
+  const fetchMcpStatus = async () => {
+    try {
+      const res = await fetch('/api/mcp-status');
+      const data = await res.json();
+      if (data.success) {
+        setMcpStatus(data.status);
+        setCredentials(data.credentials);
+      }
+    } catch (e) {
+      console.error('Failed to fetch MCP status', e);
+    }
+  };
+
   useEffect(() => {
     if (agent) {
       setInstructions(agent.agentContent || '');
       setMemory(agent.memoryContent || '');
       
       // Parse MCPs from markdown content
-      // We look for patterns like "- [x] Name" or "- [ ] Name" under an MCP section
       const mcpState = {};
       AVAILABLE_MCPS.forEach(mcp => {
         const regex = new RegExp(`-\\s*\\[([ xX])\\]\\s*${mcp.name}`, 'i');
@@ -41,6 +68,13 @@ const EditorPanel = ({ agent, isOpen, onClose, onSave, onDelete }) => {
     }
   }, [agent]);
 
+  // Load MCP status and keys whenever MCP tab is active
+  useEffect(() => {
+    if (isOpen && activeTab === 'mcps') {
+      fetchMcpStatus();
+    }
+  }, [isOpen, activeTab]);
+
   if (!agent || !isOpen) return null;
 
   const handleToggleMcp = (mcpId) => {
@@ -48,6 +82,27 @@ const EditorPanel = ({ agent, isOpen, onClose, onSave, onDelete }) => {
       ...prev,
       [mcpId]: !prev[mcpId]
     }));
+  };
+
+  const handleSaveCredential = async (keysToSave) => {
+    setIsSavingCreds(true);
+    try {
+      const res = await fetch('/api/mcp-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(keysToSave)
+      });
+      const data = await res.json();
+      if (data.success) {
+        await fetchMcpStatus(); // Re-fetch to update the badge from yellow to green
+        alert('🔑 ¡Credenciales guardadas y cargadas en caliente con éxito!');
+        setActiveMcpConfig(null);
+      }
+    } catch (e) {
+      console.error('Failed to save credentials', e);
+      alert('Error al guardar credenciales.');
+    }
+    setIsSavingCreds(false);
   };
 
   const handleSave = async () => {
@@ -61,16 +116,163 @@ const EditorPanel = ({ agent, isOpen, onClose, onSave, onDelete }) => {
     ).join('\n') + '\n';
 
     if (updatedInstructions.includes(mcpSectionTitle)) {
-      // Replace existing MCP section
       const regex = new RegExp(`${mcpSectionTitle}[\\s\\S]*?(?=\\n##|$)`);
       updatedInstructions = updatedInstructions.replace(regex, mcpBlock.trim());
     } else {
-      // Append to the end
       updatedInstructions = updatedInstructions.trim() + '\n\n' + mcpBlock;
     }
 
     await onSave(agent.id, updatedInstructions, memory);
     setIsSaving(false);
+  };
+
+  const renderCredentialsForm = (mcpId) => {
+    switch (mcpId) {
+      case 'figma-dev-mode':
+      case 'figma-live':
+        return (
+          <div className="credentials-form-box">
+            <span className="input-label-mini">Figma API Personal Token</span>
+            <input 
+              type="password" 
+              className="text-input-mini"
+              value={credentials.FIGMA_API_TOKEN}
+              onChange={(e) => setCredentials(prev => ({ ...prev, FIGMA_API_TOKEN: e.target.value }))}
+              placeholder="figd_..."
+            />
+            <button 
+              type="button"
+              className="btn-mini"
+              onClick={() => handleSaveCredential({ FIGMA_API_TOKEN: credentials.FIGMA_API_TOKEN })}
+              disabled={isSavingCreds}
+            >
+              {isSavingCreds ? 'Guardando...' : '💾 Guardar token'}
+            </button>
+          </div>
+        );
+      case 'google-search':
+        return (
+          <div className="credentials-form-box">
+            <span className="input-label-mini">Google Search API Key</span>
+            <input 
+              type="password" 
+              className="text-input-mini"
+              value={credentials.GOOGLE_SEARCH_KEY}
+              onChange={(e) => setCredentials(prev => ({ ...prev, GOOGLE_SEARCH_KEY: e.target.value }))}
+              placeholder="AIzaSy..."
+            />
+            <button 
+              type="button"
+              className="btn-mini"
+              onClick={() => handleSaveCredential({ GOOGLE_SEARCH_KEY: credentials.GOOGLE_SEARCH_KEY })}
+              disabled={isSavingCreds}
+            >
+              {isSavingCreds ? 'Guardando...' : '💾 Guardar clave'}
+            </button>
+          </div>
+        );
+      case 'github':
+        return (
+          <div className="credentials-form-box">
+            <span className="input-label-mini">GitHub Access Token (ghp_...)</span>
+            <input 
+              type="password" 
+              className="text-input-mini"
+              value={credentials.GITHUB_TOKEN}
+              onChange={(e) => setCredentials(prev => ({ ...prev, GITHUB_TOKEN: e.target.value }))}
+              placeholder="ghp_..."
+            />
+            <button 
+              type="button"
+              className="btn-mini"
+              onClick={() => handleSaveCredential({ GITHUB_TOKEN: credentials.GITHUB_TOKEN })}
+              disabled={isSavingCreds}
+            >
+              {isSavingCreds ? 'Guardando...' : '💾 Guardar token'}
+            </button>
+          </div>
+        );
+      case 'notion':
+        return (
+          <div className="credentials-form-box">
+            <span className="input-label-mini">Notion Integration Token</span>
+            <input 
+              type="password" 
+              className="text-input-mini"
+              value={credentials.NOTION_API_TOKEN}
+              onChange={(e) => setCredentials(prev => ({ ...prev, NOTION_API_TOKEN: e.target.value }))}
+              placeholder="secret_..."
+            />
+            <button 
+              type="button"
+              className="btn-mini"
+              onClick={() => handleSaveCredential({ NOTION_API_TOKEN: credentials.NOTION_API_TOKEN })}
+              disabled={isSavingCreds}
+            >
+              {isSavingCreds ? 'Guardando...' : '💾 Guardar token'}
+            </button>
+          </div>
+        );
+      case 'slack':
+        return (
+          <div className="credentials-form-box">
+            <span className="input-label-mini">Slack Webhook URL</span>
+            <input 
+              type="text" 
+              className="text-input-mini"
+              value={credentials.SLACK_WEBHOOK_URL}
+              onChange={(e) => setCredentials(prev => ({ ...prev, SLACK_WEBHOOK_URL: e.target.value }))}
+              placeholder="https://hooks.slack.com/services/..."
+            />
+            <button 
+              type="button"
+              className="btn-mini"
+              onClick={() => handleSaveCredential({ SLACK_WEBHOOK_URL: credentials.SLACK_WEBHOOK_URL })}
+              disabled={isSavingCreds}
+            >
+              {isSavingCreds ? 'Guardando...' : '💾 Guardar webhook'}
+            </button>
+          </div>
+        );
+      case 'jira':
+        return (
+          <div className="credentials-form-box" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div>
+              <span className="input-label-mini">Jira API Token</span>
+              <input 
+                type="password" 
+                className="text-input-mini"
+                value={credentials.JIRA_API_TOKEN}
+                onChange={(e) => setCredentials(prev => ({ ...prev, JIRA_API_TOKEN: e.target.value }))}
+                placeholder="ATATT..."
+              />
+            </div>
+            <div>
+              <span className="input-label-mini">Jira Workspace URL</span>
+              <input 
+                type="text" 
+                className="text-input-mini"
+                value={credentials.JIRA_WORKSPACE_URL}
+                onChange={(e) => setCredentials(prev => ({ ...prev, JIRA_WORKSPACE_URL: e.target.value }))}
+                placeholder="https://your-domain.atlassian.net"
+              />
+            </div>
+            <button 
+              type="button"
+              className="btn-mini"
+              onClick={() => handleSaveCredential({ 
+                JIRA_API_TOKEN: credentials.JIRA_API_TOKEN,
+                JIRA_WORKSPACE_URL: credentials.JIRA_WORKSPACE_URL
+              })}
+              disabled={isSavingCreds}
+            >
+              {isSavingCreds ? 'Guardando...' : '💾 Guardar credenciales'}
+            </button>
+          </div>
+        );
+      default:
+        return null;
+    }
   };
 
   return (
@@ -186,29 +388,58 @@ const EditorPanel = ({ agent, isOpen, onClose, onSave, onDelete }) => {
 
         {/* MCPs Tab */}
         {activeTab === 'mcps' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', flex: 1, overflowY: 'auto', paddingRight: '4px' }}>
             <span className="input-label">Habilitar/Deshabilitar MCP Servers</span>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-              Selecciona qué servidores de MCP (Model Context Protocol) tiene permitidos este agente. Esto actualizará el bloque de configuración del Markdown del agente.
+              Selecciona qué servidores de MCP tiene permitidos este agente. Si la herramienta requiere credenciales locales (Tokens/API Keys), configúralas abajo en caliente para activarla.
             </p>
             
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {AVAILABLE_MCPS.map(mcp => (
-                <div key={mcp.id} className="switch-container">
-                  <div className="switch-label">
-                    <span className="switch-title">{mcp.name}</span>
-                    <span className="switch-desc">{mcp.desc}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {AVAILABLE_MCPS.map(mcp => {
+                const isSystemMcp = mcp.id === 'sqlite' || mcp.id === 'filesystem';
+                const isConnected = isSystemMcp || !!mcpStatus[mcp.id];
+                
+                return (
+                  <div key={mcp.id} style={{ display: 'flex', flexDirection: 'column', background: 'rgba(255, 255, 255, 0.01)', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.03)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div className="switch-label" style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
+                          <span className="switch-title" style={{ fontSize: '0.8rem', fontWeight: '600' }}>{mcp.name}</span>
+                          {!isSystemMcp && (
+                            <span className={`mcp-status-badge ${isConnected ? 'connected' : 'disconnected'}`}>
+                              {isConnected ? '🟢 Conectado' : '🟡 Desconectado'}
+                            </span>
+                          )}
+                        </div>
+                        <span className="switch-desc" style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>{mcp.desc}</span>
+                      </div>
+                      
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {!isSystemMcp && (
+                          <button 
+                            type="button"
+                            className="mcp-config-btn"
+                            onClick={() => setActiveMcpConfig(activeMcpConfig === mcp.id ? null : mcp.id)}
+                          >
+                            {activeMcpConfig === mcp.id ? 'Ocultar' : 'Configurar'}
+                          </button>
+                        )}
+                        <label className="switch">
+                          <input 
+                            type="checkbox"
+                            checked={!!selectedMcps[mcp.id]}
+                            onChange={() => handleToggleMcp(mcp.id)}
+                          />
+                          <span className="slider"></span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Drawer de configuración de credenciales */}
+                    {activeMcpConfig === mcp.id && renderCredentialsForm(mcp.id)}
                   </div>
-                  <label className="switch">
-                    <input 
-                      type="checkbox"
-                      checked={!!selectedMcps[mcp.id]}
-                      onChange={() => handleToggleMcp(mcp.id)}
-                    />
-                    <span className="slider"></span>
-                  </label>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
