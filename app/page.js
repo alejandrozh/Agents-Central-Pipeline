@@ -503,6 +503,14 @@ export default function Home() {
           </span>
           <button 
             className="btn btn-secondary" 
+            style={{ padding: '6px 12px', border: '1px solid rgba(255, 255, 255, 0.08)' }}
+            onClick={() => setIsConceptModalOpen(true)}
+          >
+            <HelpCircle size={14} style={{ color: 'var(--text-secondary)' }} />
+            ¿Qué es un Agente?
+          </button>
+          <button 
+            className="btn btn-secondary" 
             style={{ padding: '6px 12px' }}
             onClick={fetchData}
           >
@@ -530,11 +538,6 @@ export default function Home() {
           <button className="btn btn-secondary" onClick={handleExport} style={{ border: '1px solid var(--accent-indigo)' }}>
             <Share2 size={16} color="var(--accent-indigo)" />
             Exportar a Claude
-          </button>
-
-          <button className="btn btn-secondary" onClick={() => setIsConceptModalOpen(true)} style={{ border: '1px solid var(--accent-emerald)' }}>
-            <HelpCircle size={16} color="var(--accent-emerald)" />
-            ¿Qué es un Agente?
           </button>
           
           <button 
