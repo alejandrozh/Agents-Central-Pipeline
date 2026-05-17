@@ -183,12 +183,58 @@ export async function POST(request) {
       let toolResult;
       if (approvedToolName === 'slack_post_message' && process.env.SLACK_WEBHOOK_URL) {
         try {
-          await fetch(process.env.SLACK_WEBHOOK_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: approvedToolArgs.message })
-          });
-          toolResult = { success: true, message: '💬 Mensaje enviado con éxito a Slack de verdad.' };
+          const slackUrl = process.env.SLACK_WEBHOOK_URL.trim();
+          
+          if (slackUrl.includes('app.slack.com/client/')) {
+            // Check if they also configured a Bot Token for dynamic posting
+            if (process.env.SLACK_BOT_TOKEN) {
+              const urlParts = slackUrl.split('/');
+              const channelId = urlParts[urlParts.length - 1] || urlParts[urlParts.length - 2];
+              
+              if (!channelId) {
+                throw new Error("No se pudo extraer el ID del canal desde la URL de Slack configurada.");
+              }
+              
+              const slackRes = await fetch('https://slack.com/api/chat.postMessage', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${process.env.SLACK_BOT_TOKEN}`,
+                  'Content-Type': 'application/json; charset=utf-8'
+                },
+                body: JSON.stringify({
+                  channel: channelId,
+                  text: approvedToolArgs.message
+                })
+              });
+              
+              const slackData = await slackRes.json();
+              if (!slackData.ok) {
+                throw new Error(`Error de la API de Slack: ${slackData.error}`);
+              }
+              
+              toolResult = { success: true, message: `💬 Mensaje enviado con éxito a tu conversación privada/canal de Slack (${channelId}) vía Bot Token.` };
+            } else {
+              throw new Error(
+                "Has configurado una URL de cliente de Slack de navegador (app.slack.com) en lugar de una URL de Webhook real.\n\n" +
+                "Para solucionar esto, tienes dos opciones:\n" +
+                "1. [Opción A]: Crea un Incoming Webhook en tu espacio de trabajo (https://api.slack.com/apps) y pega la URL de Webhook real (que empieza por 'https://hooks.slack.com/services/').\n" +
+                "2. [Opción B]: Mantén tu enlace actual y añade la variable 'SLACK_BOT_TOKEN=xoxb-...' en tu archivo .env.local para permitir el envío directo a través de la API oficial de Slack."
+              );
+            }
+          } else if (slackUrl.startsWith('https://hooks.slack.com/services/')) {
+            // Standard Incoming Webhook
+            const res = await fetch(slackUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: approvedToolArgs.message })
+            });
+            if (!res.ok) {
+              throw new Error(`El Webhook de Slack devolvió el código de estado: ${res.status}`);
+            }
+            toolResult = { success: true, message: '💬 Mensaje enviado con éxito a Slack usando tu Incoming Webhook.' };
+          } else {
+            throw new Error("La URL de Slack configurada no es válida. Debe ser un Webhook (hooks.slack.com) o un enlace de cliente con SLACK_BOT_TOKEN.");
+          }
         } catch (e) {
           toolResult = { success: false, error: e.message };
         }
