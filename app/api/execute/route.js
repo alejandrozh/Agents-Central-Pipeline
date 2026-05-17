@@ -273,13 +273,21 @@ export async function POST(request) {
       await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate thinking
       
       // Simulate real Human-in-the-Loop interception in simulated environment!
-      if (agentName.toLowerCase().includes('marketing') && !isMockApprovalAction) {
+      const isSlackRequest = prompt && (prompt.toLowerCase().includes('slack') || prompt.toLowerCase().includes('mensaje') || prompt.toLowerCase().includes('hola'));
+      const isJiraRequest = prompt && (prompt.toLowerCase().includes('jira') || prompt.toLowerCase().includes('ticket') || prompt.toLowerCase().includes('issue'));
+
+      if ((agentName.toLowerCase().includes('marketing') || isSlackRequest) && !isMockApprovalAction) {
+        let slackMessage = `📣 *Mensaje en vivo de ${agentName}*:\nUn saludo especial enviado de verdad desde tu lienzo de Agents Central Pipeline.`;
+        if (prompt && prompt.toLowerCase().includes('hola')) {
+          slackMessage = "👋 ¡Hola! Un saludo muy especial enviado en vivo desde tu Agents Central Pipeline.";
+        }
+        
         return NextResponse.json({
           requiresApproval: true,
           toolCall: {
             name: 'slack_post_message',
             args: {
-              message: `📣 *Nueva Campaña de Marketing de ${agentName}*:\nHe analizado el diseño y propongo lanzar la nueva landing page neón con transformaciones fluidas. ¡Feedback apreciado!`
+              message: slackMessage
             },
             agentName
           },
@@ -287,7 +295,7 @@ export async function POST(request) {
         });
       }
 
-      if (agentName.toLowerCase().includes('growth') && !isMockApprovalAction) {
+      if ((agentName.toLowerCase().includes('growth') || isJiraRequest) && !isMockApprovalAction) {
         return NextResponse.json({
           requiresApproval: true,
           toolCall: {
