@@ -96,6 +96,7 @@ export default function Home() {
             id: agent.id,
             agentContent: agent.agentContent,
             memoryContent: agent.memoryContent,
+            enabledApps: agent.enabledApps || [],
           },
         };
       });
@@ -115,6 +116,55 @@ export default function Home() {
       console.error('Failed to fetch agents data', e);
     }
   };
+
+  // Helper to compute reachable nodes in downstream DAG
+  const getDownstreamNodes = useCallback((startId, allEdges) => {
+    const visited = new Set();
+    const queue = [startId];
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (!visited.has(current)) {
+        visited.add(current);
+        const children = allEdges
+          .filter(e => e.source === current)
+          .map(e => e.target);
+        queue.push(...children);
+      }
+    }
+    return Array.from(visited);
+  }, []);
+
+  // Update visual nodes state to inject active status, start node status, completed status, running status and enabledApps in real time
+  useEffect(() => {
+    if (agents.length === 0) return;
+    
+    const activeChain = selectedAgent ? getDownstreamNodes(selectedAgent.id, edges) : agents.map(a => a.id);
+    
+    setNodes(prevNodes => 
+      prevNodes.map(node => {
+        const agent = agents.find(a => a.id === node.id);
+        const isSelected = selectedAgent?.id === node.id;
+        const isActiveFlow = activeChain.includes(node.id);
+        const isRunning = runningNodeId === node.id;
+        const isCompleted = completedNodeIds.includes(node.id);
+        
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            name: agent?.name || node.data.name,
+            agentContent: agent?.agentContent || node.data.agentContent,
+            memoryContent: agent?.memoryContent || node.data.memoryContent,
+            enabledApps: agent?.enabledApps || [],
+            isStartNode: isSelected,
+            isActiveFlow: isActiveFlow,
+            hasSelection: !!selectedAgent,
+            status: isRunning ? 'running' : (isCompleted ? 'completed' : (isActiveFlow ? 'active' : 'idle'))
+          }
+        };
+      })
+    );
+  }, [selectedAgent, runningNodeId, completedNodeIds, agents, edges, getDownstreamNodes]);
 
   useEffect(() => {
     fetchData();

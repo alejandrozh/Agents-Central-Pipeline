@@ -313,6 +313,117 @@ body {
   background-color: var(--accent-emerald);
 }
 
+/* Excluded & Active flow node styles */
+.react-flow__node {
+  transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s, box-shadow 0.3s !important;
+}
+
+/* If a selection is active, dim nodes that are not in the flow path */
+.agent-node-inner.excluded-node {
+  opacity: 0.35;
+  filter: grayscale(40%);
+}
+
+.agent-node-inner.active-flow-node {
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.1);
+}
+
+/* Glowing Start Node Ribbon & Border Styles */
+.agent-node-inner.start-node {
+  border: 2.5px solid var(--accent-indigo);
+  box-shadow: 0 0 25px rgba(99, 102, 241, 0.5), 0 10px 30px -10px rgba(0, 0, 0, 0.7);
+  animation: startNodePulse 2.5s infinite alternate ease-in-out;
+}
+
+@keyframes startNodePulse {
+  0% {
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.3), 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+  }
+  100% {
+    box-shadow: 0 0 30px rgba(99, 102, 241, 0.6), 0 10px 30px -10px rgba(0, 0, 0, 0.8);
+  }
+}
+
+.start-node-ribbon {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #ffffff;
+  font-family: monospace;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.4);
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  z-index: 10;
+}
+
+/* Node App Row and badges styling */
+.node-apps-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.node-summary-text {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.app-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.6rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* Palette tailored badge colors */
+.app-badge.google {
+  background: rgba(59, 130, 246, 0.08);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.15);
+}
+
+.app-badge.notion {
+  background: rgba(243, 244, 246, 0.04);
+  color: #e5e7eb;
+  border: 1px solid rgba(243, 244, 246, 0.1);
+}
+
+.app-badge.figma {
+  background: rgba(236, 72, 153, 0.08);
+  color: #f472b6;
+  border: 1px solid rgba(236, 72, 153, 0.15);
+}
+
+.app-badge.slack {
+  background: rgba(16, 185, 129, 0.08);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.15);
+}
+
+.app-badge.jira {
+  background: rgba(245, 158, 11, 0.08);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.15);
+}
+
 /* Side Panels */
 .side-panel {
   position: absolute;

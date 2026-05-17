@@ -1,25 +1,40 @@
 import React, { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { Bot, Layers, CheckCircle } from 'lucide-react';
+import { Bot, Layers, Search, BookOpen, MessageSquare, Ticket, Palette, Play } from 'lucide-react';
 
 const AgentNode = ({ data }) => {
   // Try to extract a brief description from the markdown instructions
   const getSummary = (content) => {
     if (!content) return 'Sin instrucciones definidas.';
-    // Find content under "Objetivo" or just the first paragraph
     const objectiveMatch = content.match(/## Objetivo\n([\s\S]*?)(?=\n##|$)/);
     let summary = objectiveMatch ? objectiveMatch[1].trim() : content;
     
-    // Clean up markdown formatting for summary
     summary = summary.replace(/[#*`_-]/g, '').trim();
-    if (summary.length > 80) {
-      return summary.substring(0, 80) + '...';
+    if (summary.length > 70) {
+      return summary.substring(0, 70) + '...';
     }
     return summary;
   };
 
+  const enabledApps = data.enabledApps || [];
+
+  // Determine wrapper classes based on visual flow status
+  const classes = [
+    'agent-node-inner',
+    data.isStartNode ? 'start-node' : '',
+    data.hasSelection && !data.isActiveFlow ? 'excluded-node' : '',
+    data.isActiveFlow && !data.isStartNode ? 'active-flow-node' : ''
+  ].filter(Boolean).join(' ');
+
   return (
-    <div className="agent-node-inner">
+    <div className={classes}>
+      {data.isStartNode && (
+        <div className="start-node-ribbon">
+          <Play size={8} style={{ fill: '#10b981', stroke: '#10b981', marginRight: '2px' }} />
+          PUNTO INICIO
+        </div>
+      )}
+
       <Handle
         type="target"
         position={Position.Top}
@@ -44,7 +59,38 @@ const AgentNode = ({ data }) => {
       </div>
       
       <div className="node-body">
-        {getSummary(data.agentContent)}
+        <p className="node-summary-text">{getSummary(data.agentContent)}</p>
+        
+        {/* Render App badges if any are enabled */}
+        {enabledApps.length > 0 && (
+          <div className="node-apps-row">
+            {enabledApps.includes('google-search') && (
+              <span className="app-badge google" title="Google Search">
+                <Search size={8} /> Google
+              </span>
+            )}
+            {enabledApps.includes('notion') && (
+              <span className="app-badge notion" title="Notion Workspace">
+                <BookOpen size={8} /> Notion
+              </span>
+            )}
+            {(enabledApps.includes('figma-dev-mode') || enabledApps.includes('figma-live')) && (
+              <span className="app-badge figma" title="Figma Integration">
+                <Palette size={8} /> Figma
+              </span>
+            )}
+            {enabledApps.includes('slack') && (
+              <span className="app-badge slack" title="Slack Connect">
+                <MessageSquare size={8} /> Slack
+              </span>
+            )}
+            {enabledApps.includes('jira') && (
+              <span className="app-badge jira" title="Jira Management">
+                <Ticket size={8} /> Jira
+              </span>
+            )}
+          </div>
+        )}
       </div>
       
       <div className="node-footer">
@@ -52,11 +98,13 @@ const AgentNode = ({ data }) => {
           <span 
             className="status-dot" 
             style={{ 
-              backgroundColor: data.status === 'running' ? '#eab308' : (data.status === 'completed' ? '#10b981' : '#6366f1'),
+              backgroundColor: data.status === 'running' ? '#eab308' : (data.status === 'completed' ? '#10b981' : (data.isActiveFlow ? '#8b5cf6' : '#4b5563')),
               boxShadow: data.status === 'running' ? '0 0 8px #eab308' : 'none'
             }}
           ></span>
-          <span>{data.status === 'running' ? 'Procesando...' : (data.status === 'completed' ? 'Completado' : 'Listo')}</span>
+          <span style={{ color: data.isActiveFlow ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+            {data.status === 'running' ? 'Procesando...' : (data.status === 'completed' ? 'Completado' : (data.isActiveFlow ? 'Activo' : 'Listo'))}
+          </span>
         </div>
         <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
           <Layers size={10} />
