@@ -775,6 +775,10 @@ export default function Home() {
           onConnect={onConnect}
           onNodeClick={onNodeClick}
           onEdgeDoubleClick={onEdgeDoubleClick}
+          onPaneClick={() => {
+            setSelectedAgent(null);
+            setIsEditorOpen(false);
+          }}
         />
 
         {/* Right Side Editing Panel */}

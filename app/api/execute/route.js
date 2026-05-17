@@ -70,7 +70,9 @@ const tools = [
           type: 'OBJECT',
           properties: {
             title: { type: 'STRING', description: 'Título del reporte de Notion.' },
-            content: { type: 'STRING', description: 'Contenido completo en formato Markdown.' }
+            content: { type: 'STRING', description: 'Contenido completo en formato Markdown.' },
+            parentPageId: { type: 'STRING', description: 'El ID de la página padre de Notion (opcional) donde se creará esta página.' },
+            databaseId: { type: 'STRING', description: 'El ID de la base de datos de Notion (opcional) en la que se agregará esta página.' }
           },
           required: ['title', 'content']
         }
@@ -139,7 +141,9 @@ async function executeTool(name, args) {
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-              parent: { page_id: 'workspace' }, // Fallback page ID or parent workspace
+              parent: args.databaseId 
+                ? { database_id: args.databaseId } 
+                : (args.parentPageId ? { page_id: args.parentPageId } : { type: "workspace" }),
               properties: {
                 title: { title: [{ text: { content: args.title } }] }
               }
@@ -152,7 +156,10 @@ async function executeTool(name, args) {
           console.error('Error Notion page:', e);
         }
       }
-      return { success: true, message: `[Simulado Notion] Página "${args.title}" creada con éxito en Notion Workspace.` };
+      const destInfo = args.databaseId 
+        ? `en la base de datos con ID "${args.databaseId}"`
+        : (args.parentPageId ? `dentro de la página con ID "${args.parentPageId}"` : 'en tu Workspace');
+      return { success: true, message: `[Simulado Notion] Página "${args.title}" creada con éxito ${destInfo} en Notion.` };
     }
     case 'figma_get_document': {
       if (process.env.FIGMA_API_TOKEN) {
