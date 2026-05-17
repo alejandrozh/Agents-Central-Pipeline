@@ -738,7 +738,7 @@ input:checked + .slider:before {
   border-radius: 16px;
   overflow: hidden;
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  max-height: 420px;
+  max-height: 300px;
   display: flex;
   flex-direction: column;
 }
@@ -752,7 +752,7 @@ input:checked + .slider:before {
 }
 
 .chat-console-header {
-  padding: 12px 20px;
+  padding: 8px 16px;
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
@@ -763,22 +763,22 @@ input:checked + .slider:before {
 }
 
 .chat-console-body {
-  padding: 16px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   overflow-y: auto;
   flex: 1;
   background: rgba(8, 7, 16, 0.95);
-  min-height: 200px;
-  max-height: 300px;
+  min-height: 110px;
+  max-height: 180px;
 }
 
 .chat-bubble {
-  padding: 10px 14px;
+  padding: 8px 12px;
   border-radius: 12px;
   max-width: 85%;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   line-height: 1.4;
 }
 
@@ -798,7 +798,7 @@ input:checked + .slider:before {
 .chat-console-input-row {
   display: flex;
   gap: 8px;
-  padding: 12px 16px;
+  padding: 8px 12px;
   border-top: 1px solid var(--border-color);
   background: rgba(255, 255, 255, 0.01);
 }
@@ -808,9 +808,9 @@ input:checked + .slider:before {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 20px;
-  padding: 8px 16px;
+  padding: 6px 12px;
   color: var(--text-primary);
-  font-size: 0.85rem;
+  font-size: 0.8rem;
 }
 
 .chat-input:focus {

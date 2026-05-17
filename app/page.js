@@ -53,7 +53,7 @@ export default function Home() {
   const [chatInput, setChatInput] = useState('');
   const [runningNodeId, setRunningNodeId] = useState(null);
   const [completedNodeIds, setCompletedNodeIds] = useState([]);
-  const [isChatConsoleOpen, setIsChatConsoleOpen] = useState(true);
+  const [isChatConsoleOpen, setIsChatConsoleOpen] = useState(false);
   const [isChatExecuting, setIsChatExecuting] = useState(false);
 
   // Fetch agents data
@@ -545,8 +545,8 @@ export default function Home() {
         />
 
         {/* Dynamic Orchestration Chat Console (Slide Up) */}
-        <div className={`chat-console-container glass ${!isGuideOpen ? 'wide-left' : ''} ${!isEditorOpen ? 'wide-right' : ''}`} style={{ height: isChatConsoleOpen ? '380px' : '48px' }}>
-          <div className="chat-console-header" onClick={() => setIsChatConsoleOpen(!isChatConsoleOpen)}>
+        <div className={`chat-console-container glass ${!isGuideOpen ? 'wide-left' : ''} ${!isEditorOpen ? 'wide-right' : ''}`} style={{ height: isChatConsoleOpen ? '280px' : '40px' }}>
+          <div className="chat-console-header" onClick={() => setIsChatConsoleOpen(!isChatConsoleOpen)} style={{ padding: '8px 16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: isChatExecuting ? '#eab308' : '#10b981', boxShadow: isChatExecuting ? '0 0 8px #eab308' : 'none' }}></span>
               <span style={{ fontWeight: '600', fontSize: '0.85rem', letterSpacing: '0.5px' }}>
