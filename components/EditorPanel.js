@@ -6,10 +6,14 @@ import ReactMarkdown from 'react-markdown';
 
 const AVAILABLE_MCPS = [
   { id: 'figma-dev-mode', name: 'Figma Dev Mode', desc: 'Acceso a Figma Dev Mode MCP' },
+  { id: 'figma-live', name: 'Figma Live Edit', desc: 'Modificación en tiempo real y lectura de canvas en Figma normal' },
   { id: 'filesystem', name: 'File System', desc: 'Lectura y escritura en el sistema local' },
   { id: 'google-search', name: 'Google Search', desc: 'Búsquedas en Google en tiempo real' },
   { id: 'github', name: 'GitHub Integration', desc: 'Creación de repositorios y Pull Requests' },
   { id: 'sqlite', name: 'SQLite Manager', desc: 'Almacenamiento estructurado en base de datos' },
+  { id: 'notion', name: 'Notion Workspace', desc: 'Lectura/escritura de bases de datos y páginas de Notion' },
+  { id: 'slack', name: 'Slack Connect', desc: 'Publicar notificaciones y chatear por canales de Slack' },
+  { id: 'jira', name: 'Jira Management', desc: 'Creación, actualización y consulta de incidencias y epics en Jira' },
 ];
 
 const EditorPanel = ({ agent, isOpen, onClose, onSave, onDelete }) => {
